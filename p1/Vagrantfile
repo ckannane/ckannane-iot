@@ -1,0 +1,41 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+BOX   = "generic/ubuntu2204"
+LOGIN = "chafiq"
+
+NODES = {
+  "#{LOGIN}S"  => { ip: "192.168.56.110", role: "server" },
+  "#{LOGIN}SW" => { ip: "192.168.56.111", role: "agent"  },
+}
+
+SERVER_IP = NODES["#{LOGIN}S"][:ip]
+
+Vagrant.configure("2") do |config|
+  config.vm.box = BOX
+  config.vm.box_check_update = false
+
+  NODES.each do |name, opts|
+    config.vm.define name do |node|
+      node.vm.hostname = name
+
+      node.vm.network "private_network", ip: opts[:ip]
+
+      node.vm.provider "virtualbox" do |vb|
+        vb.name   = name
+        vb.memory = 1024
+        vb.cpus   = 1
+      end
+
+      if opts[:role] == "server"
+        node.vm.provision "shell",
+          path: "scripts/install_k3s_server.sh",
+          env:  { "NODE_IP" => opts[:ip] }
+      else
+        node.vm.provision "shell",
+          path: "scripts/install_k3s_agent.sh",
+          env:  { "NODE_IP" => opts[:ip], "SERVER_IP" => SERVER_IP }
+      end
+    end
+  end
+end

@@ -1,0 +1,58 @@
+# Minimal-footprint GitLab values for a local k3d single-node cluster.
+# Trims optional subcharts/resources so it can run on a laptop-scale VM.
+global:
+  edition: ce
+  hosts:
+    domain: gitlab.local
+  ingress:
+    enabled: true
+    class: traefik
+    configureCertmanager: false
+  certmanager:
+    install: false
+
+certmanager:
+  install: false
+nginx-ingress:
+  enabled: false
+prometheus:
+  install: false
+grafana:
+  install: false
+gitlab-runner:
+  install: false
+
+gitlab:
+  webservice:
+    minReplicas: 1
+    maxReplicas: 1
+    resources:
+      requests:
+        cpu: 300m
+        memory: 1Gi
+  sidekiq:
+    minReplicas: 1
+    maxReplicas: 1
+  gitaly:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+
+postgresql:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+minio:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
