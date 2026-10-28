@@ -49,6 +49,11 @@ echo ">>> Installing VirtualBox and Vagrant"
 apt-get update
 apt-get install -y virtualbox-7.2 vagrant
 
+# VirtualBox can't start VMs while KVM holds VT-x (VERR_VMX_IN_VMX_ROOT_MODE).
+echo ">>> Unloading and blacklisting KVM so VirtualBox owns VT-x"
+printf 'blacklist kvm_intel\nblacklist kvm_amd\nblacklist kvm\n' > /etc/modprobe.d/blacklist-kvm.conf
+modprobe -r kvm_intel kvm_amd kvm 2>/dev/null || true
+
 if [ -n "${SUDO_USER:-}" ]; then
   usermod -aG vboxusers "${SUDO_USER}"
   echo ">>> Added ${SUDO_USER} to vboxusers: log out and back in before vagrant up."
