@@ -3,20 +3,17 @@ set -euo pipefail
 
 NODE_IP="${NODE_IP:?NODE_IP env var required}"
 SERVER_IP="${SERVER_IP:?SERVER_IP env var required}"
+K3S_TOKEN="${K3S_TOKEN:?K3S_TOKEN env var required}"
 
 IFACE=$(ip -o addr show | awk -v ip="$NODE_IP" '$0 ~ ip {print $2}' | head -n1)
 
-echo ">>> Waiting for node-token from server..."
-until [ -f /vagrant/confs/node-token ]; do
-  sleep 2
-done
-NODE_TOKEN=$(cat /vagrant/confs/node-token)
+systemctl disable --now firewalld 2>/dev/null || true
 
 echo ">>> Installing K3s agent on ${NODE_IP} (iface ${IFACE}), joining ${SERVER_IP}"
 
 curl -sfL https://get.k3s.io | \
   K3S_URL="https://${SERVER_IP}:6443" \
-  K3S_TOKEN="${NODE_TOKEN}" \
+  K3S_TOKEN="${K3S_TOKEN}" \
   INSTALL_K3S_EXEC="agent --node-ip=${NODE_IP} --flannel-iface=${IFACE}" sh -
 
 echo ">>> Installing standalone kubectl"

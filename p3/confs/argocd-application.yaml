@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/ckannane/chafiq-iot.git
+    repoURL: https://github.com/ckannane/ckannane-iot.git
     targetRevision: HEAD
     path: p3/confs/app
   destination:

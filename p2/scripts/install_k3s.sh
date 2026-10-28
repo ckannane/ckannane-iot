@@ -4,6 +4,9 @@ set -euo pipefail
 NODE_IP="${NODE_IP:?NODE_IP env var required}"
 IFACE=$(ip -o addr show | awk -v ip="$NODE_IP" '$0 ~ ip {print $2}' | head -n1)
 
+# K3s recommends turning firewalld off on RHEL-family distros.
+systemctl disable --now firewalld 2>/dev/null || true
+
 echo ">>> Installing K3s server (with built-in Traefik ingress) on ${NODE_IP} (iface ${IFACE})"
 
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
@@ -31,9 +34,9 @@ grep -qxF 'export KUBECONFIG=/home/vagrant/.kube/config' /home/vagrant/.bashrc |
 # both on first boot and on every subsequent `vagrant provision`.
 echo ">>> Deploying the three applications + ingress"
 mkdir -p /var/lib/rancher/k3s/server/manifests
-cp /vagrant/confs/app-one.yaml   /var/lib/rancher/k3s/server/manifests/
-cp /vagrant/confs/app-two.yaml   /var/lib/rancher/k3s/server/manifests/
-cp /vagrant/confs/app-three.yaml /var/lib/rancher/k3s/server/manifests/
-cp /vagrant/confs/ingress.yaml   /var/lib/rancher/k3s/server/manifests/
+cp /tmp/confs/app-one.yaml   /var/lib/rancher/k3s/server/manifests/
+cp /tmp/confs/app-two.yaml   /var/lib/rancher/k3s/server/manifests/
+cp /tmp/confs/app-three.yaml /var/lib/rancher/k3s/server/manifests/
+cp /tmp/confs/ingress.yaml   /var/lib/rancher/k3s/server/manifests/
 
 echo ">>> K3s server ready."

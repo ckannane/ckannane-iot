@@ -1,0 +1,23 @@
+# Same Application as Part 3, but sourced from the local GitLab instead of
+# GitHub. Applying it over the Part 3 one switches its source in place.
+# Argo CD reaches GitLab through the in-cluster webservice (workhorse) Service.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wil-playground
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: http://gitlab-webservice-default.gitlab.svc:8181/root/ckannane-iot.git
+    targetRevision: HEAD
+    path: .
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

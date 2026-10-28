@@ -1,8 +1,13 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-BOX   = "generic/ubuntu2204"
-LOGIN = "chafiq"
+require "securerandom"
+
+# Official Rocky Linux box, published by the Rocky project itself (not the
+# HashiCorp registry). "latest" always points to the newest point release.
+BOX     = "rockylinux-10"
+BOX_URL = "https://dl.rockylinux.org/pub/rocky/10/images/x86_64/Rocky-10-Vagrant-Vbox.latest.x86_64.vagrant.virtualbox.box"
+LOGIN   = "ckannane"
 
 NODES = {
   "#{LOGIN}S"  => { ip: "192.168.56.110", role: "server" },
@@ -11,9 +16,20 @@ NODES = {
 
 SERVER_IP = NODES["#{LOGIN}S"][:ip]
 
+# Pre-shared K3s join token, generated once on the host and handed to both
+# nodes, so the agent never has to read anything back from the server.
+TOKEN_FILE = File.join(__dir__, ".k3s-token")
+File.write(TOKEN_FILE, SecureRandom.hex(32)) unless File.exist?(TOKEN_FILE)
+K3S_TOKEN = File.read(TOKEN_FILE).strip
+
 Vagrant.configure("2") do |config|
-  config.vm.box = BOX
+  config.vm.box     = BOX
+  config.vm.box_url = BOX_URL
   config.vm.box_check_update = false
+
+  # The official box ships without VirtualBox Guest Additions; nothing here
+  # needs a shared folder, so skip it instead of failing on vboxsf.
+  config.vm.synced_folder ".", "/vagrant", disabled: true
 
   NODES.each do |name, opts|
     config.vm.define name do |node|
@@ -30,11 +46,11 @@ Vagrant.configure("2") do |config|
       if opts[:role] == "server"
         node.vm.provision "shell",
           path: "scripts/install_k3s_server.sh",
-          env:  { "NODE_IP" => opts[:ip] }
+          env:  { "NODE_IP" => opts[:ip], "K3S_TOKEN" => K3S_TOKEN }
       else
         node.vm.provision "shell",
           path: "scripts/install_k3s_agent.sh",
-          env:  { "NODE_IP" => opts[:ip], "SERVER_IP" => SERVER_IP }
+          env:  { "NODE_IP" => opts[:ip], "SERVER_IP" => SERVER_IP, "K3S_TOKEN" => K3S_TOKEN }
       end
     end
   end

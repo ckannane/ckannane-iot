@@ -4,6 +4,9 @@ metadata:
   name: wil-playground
   namespace: dev
 spec:
+  # LoadBalancer so k3d's 8888 host port mapping reaches the app directly:
+  # curl http://localhost:8888/ works without a port-forward.
+  type: LoadBalancer
   selector:
     app: wil-playground
   ports:

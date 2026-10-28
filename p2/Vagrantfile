@@ -1,14 +1,22 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-BOX   = "generic/ubuntu2204"
-LOGIN = "chafiq"
-NAME  = "#{LOGIN}S"
-IP    = "192.168.56.110"
+# Official Rocky Linux box, published by the Rocky project itself (not the
+# HashiCorp registry). "latest" always points to the newest point release.
+BOX     = "rockylinux-10"
+BOX_URL = "https://dl.rockylinux.org/pub/rocky/10/images/x86_64/Rocky-10-Vagrant-Vbox.latest.x86_64.vagrant.virtualbox.box"
+LOGIN   = "ckannane"
+NAME    = "#{LOGIN}S"
+IP      = "192.168.56.110"
 
 Vagrant.configure("2") do |config|
-  config.vm.box = BOX
+  config.vm.box     = BOX
+  config.vm.box_url = BOX_URL
   config.vm.box_check_update = false
+
+  # The official box ships without VirtualBox Guest Additions, so the
+  # manifests are uploaded over SSH instead of through a shared folder.
+  config.vm.synced_folder ".", "/vagrant", disabled: true
 
   config.vm.define NAME do |node|
     node.vm.hostname = NAME
@@ -20,6 +28,10 @@ Vagrant.configure("2") do |config|
       vb.cpus   = 1
     end
 
+    # Clear any previous upload first, or a re-provision would nest the
+    # folder as /tmp/confs/confs.
+    node.vm.provision "shell", inline: "rm -rf /tmp/confs"
+    node.vm.provision "file", source: "confs", destination: "/tmp/confs"
     node.vm.provision "shell",
       path: "scripts/install_k3s.sh",
       env:  { "NODE_IP" => IP }

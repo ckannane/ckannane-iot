@@ -29,3 +29,5 @@ if ! command -v argocd >/dev/null 2>&1; then
 fi
 
 echo ">>> All tools installed: docker, kubectl, k3d, argocd."
+echo ">>> Docker group membership only applies to new sessions: log out and back"
+echo ">>> in (or run 'newgrp docker') before running bootstrap.sh."

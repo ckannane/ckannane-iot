@@ -1,26 +1,36 @@
-# Minimal-footprint GitLab values for a local k3d single-node cluster.
-# Trims optional subcharts/resources so it can run on a laptop-scale VM.
+# Minimal-footprint GitLab values for the local k3d cluster from Part 3.
+# Plain HTTP through k3d's bundled Traefik; optional subcharts are trimmed so
+# it fits on a laptop-scale VM.
 global:
   edition: ce
   hosts:
-    domain: gitlab.local
+    domain: k3d.local          # GitLab is served at gitlab.k3d.local
+    https: false
+  # Since GitLab 19.0 the chart defaults to Gateway API + a bundled Envoy
+  # Gateway. k3d already ships Traefik, so use a plain Ingress instead.
+  gatewayApi:
+    enabled: false
+    installEnvoy: false
+    configureCertmanager: false
   ingress:
     enabled: true
     class: traefik
+    provider: traefik
     configureCertmanager: false
-  certmanager:
-    install: false
+    tls:
+      enabled: false
+  kas:
+    enabled: false
 
-certmanager:
-  install: false
+installCertmanager: false
 nginx-ingress:
   enabled: false
 prometheus:
   install: false
-grafana:
-  install: false
 gitlab-runner:
   install: false
+registry:
+  enabled: false
 
 gitlab:
   webservice:
@@ -31,6 +41,9 @@ gitlab:
         cpu: 300m
         memory: 1Gi
   sidekiq:
+    minReplicas: 1
+    maxReplicas: 1
+  gitlab-shell:
     minReplicas: 1
     maxReplicas: 1
   gitaly:
