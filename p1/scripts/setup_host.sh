@@ -20,7 +20,18 @@ fi
 
 echo ">>> Installing base packages"
 apt-get update
-apt-get install -y git curl wget gpg build-essential "linux-headers-$(uname -r)"
+apt-get install -y git curl wget gpg build-essential
+
+# VirtualBox builds its kernel driver against the running kernel's headers.
+# If the archive has moved on to a newer kernel, upgrade and reboot first.
+if ! apt-get install -y "linux-headers-$(uname -r)"; then
+  echo ">>> Headers for the running kernel ($(uname -r)) are gone from the archive."
+  echo ">>> Upgrading to the current kernel instead."
+  apt-get full-upgrade -y
+  apt-get install -y linux-image-amd64 linux-headers-amd64
+  echo "!!! Reboot this VM ('reboot'), reconnect, and run this script again." >&2
+  exit 1
+fi
 
 echo ">>> Adding the VirtualBox apt repo (${CODENAME})"
 wget -qO- https://www.virtualbox.org/download/oracle_vbox_2016.asc \
