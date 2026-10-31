@@ -31,6 +31,14 @@ Vagrant.configure("2") do |config|
   # needs a shared folder, so skip it instead of failing on vboxsf.
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
+  # OpenSSH 9.8+ temporarily refuses sources that trip its penalty rules. Through
+  # VirtualBox NAT every connection comes from 10.0.2.2, so exempt that address
+  # or vagrant ssh can get locked out.
+  config.vm.provision "shell", inline: <<-SHELL
+    echo 'PerSourcePenaltyExemptList 10.0.2.2' > /etc/ssh/sshd_config.d/10-vagrant-nat.conf
+    systemctl reload sshd
+  SHELL
+
   NODES.each do |name, opts|
     config.vm.define name do |node|
       node.vm.hostname = name
