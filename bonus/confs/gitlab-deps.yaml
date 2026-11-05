@@ -43,6 +43,9 @@ spec:
       containers:
         - name: postgres
           image: postgres:17
+          # GitLab loads its whole schema in one transaction; the default of 64
+          # runs out ("out of shared memory").
+          args: ["-c", "max_locks_per_transaction=512"]
           env:
             - name: POSTGRES_USER
               value: gitlab

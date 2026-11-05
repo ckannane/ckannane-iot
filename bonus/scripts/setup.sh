@@ -96,7 +96,9 @@ helm upgrade --install gitlab gitlab/gitlab \
   -f "${HERE}/../confs/values.yaml" \
   --timeout 600s
 
-kubectl -n gitlab rollout status deployment/gitlab-webservice-default --timeout=1800s
+# Not 'rollout status': it gives up at the Deployment's 10-minute progress
+# deadline, and a first install waits that long for the database migrations.
+kubectl -n gitlab wait --for=condition=Available deployment/gitlab-webservice-default --timeout=1800s
 until curl -sf -o /dev/null "http://${GITLAB_HOST}/users/sign_in"; do
   echo "    waiting for http://${GITLAB_HOST} ..."
   sleep 10
