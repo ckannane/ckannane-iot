@@ -1,6 +1,7 @@
 # Minimal-footprint GitLab values for the local k3d cluster from Part 3.
-# Plain HTTP through k3d's bundled Traefik; optional subcharts are trimmed so
-# it fits on a laptop-scale VM.
+# Plain HTTP through k3d's bundled Traefik. Since chart v10.0 (GitLab 19),
+# PostgreSQL, Redis and object storage are external: they come from
+# gitlab-deps.yaml, deployed by setup.sh into the same namespace.
 global:
   edition: ce
   hosts:
@@ -22,6 +23,33 @@ global:
   kas:
     enabled: false
 
+  psql:
+    host: gitlab-postgres.gitlab.svc.cluster.local
+    port: 5432
+    database: gitlabhq_production
+    username: gitlab
+    password:
+      secret: gitlab-postgres
+      key: password
+
+  redis:
+    host: gitlab-valkey.gitlab.svc.cluster.local
+    port: 6379
+    auth:
+      enabled: false
+
+  minio:
+    enabled: false
+  appConfig:
+    object_store:
+      enabled: true
+      # Garage is only reachable inside the cluster, so GitLab proxies
+      # downloads instead of redirecting browsers to it.
+      proxy_download: true
+      connection:
+        secret: gitlab-object-storage
+        key: config
+
 installCertmanager: false
 nginx-ingress:
   enabled: false
@@ -33,6 +61,12 @@ registry:
   enabled: false
 
 gitlab:
+  toolbox:
+    backups:
+      objectStorage:
+        config:
+          secret: gitlab-object-storage-s3cmd
+          key: config
   webservice:
     minReplicas: 1
     maxReplicas: 1
@@ -51,21 +85,3 @@ gitlab:
       requests:
         cpu: 100m
         memory: 512Mi
-
-postgresql:
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-
-redis:
-  resources:
-    requests:
-      cpu: 50m
-      memory: 128Mi
-
-minio:
-  resources:
-    requests:
-      cpu: 50m
-      memory: 128Mi

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Adds a local GitLab (namespace 'gitlab') to the Part 3 k3d lab, pushes the
-# app manifests to a repo on it, and points Argo CD at that repo instead of
+# Adds a local GitLab (namespace 'gitlab') to the Part 3 k3d lab, together with
+# the PostgreSQL, Valkey and Garage services the chart no longer bundles, pushes
+# the app manifests to a repo on it, and points Argo CD at that repo instead of
 # GitHub. Run after p3/scripts/install.sh; creates the Part 3 cluster if needed.
 set -euo pipefail
 
@@ -31,6 +32,61 @@ grep -q " ${GITLAB_HOST}$" /etc/hosts || \
 
 echo ">>> Creating gitlab namespace"
 kubectl create namespace gitlab --dry-run=client -o yaml | kubectl apply -f -
+
+# Random hex without SIGPIPE surprises under 'set -o pipefail'.
+randhex() { od -An -N"$1" -tx1 /dev/urandom | tr -d ' \n'; }
+
+echo ">>> Deploying PostgreSQL, Valkey and Garage (no longer bundled since chart v10)"
+if ! kubectl -n gitlab get secret gitlab-postgres >/dev/null 2>&1; then
+  kubectl -n gitlab create secret generic gitlab-postgres \
+    --from-literal=password="$(randhex 16)"
+fi
+if ! kubectl -n gitlab get secret gitlab-garage-config >/dev/null 2>&1; then
+  kubectl -n gitlab create secret generic gitlab-garage-config \
+    --from-file=garage.toml=<(sed "s/RPC_SECRET/$(randhex 32)/" "${HERE}/../confs/garage.toml")
+fi
+kubectl apply -f "${HERE}/../confs/gitlab-deps.yaml"
+kubectl -n gitlab rollout status statefulset/gitlab-postgres --timeout=600s
+kubectl -n gitlab rollout status deployment/gitlab-valkey   --timeout=600s
+kubectl -n gitlab rollout status statefulset/gitlab-garage  --timeout=600s
+
+echo ">>> Configuring Garage: layout, access key and GitLab's buckets"
+garage_cli() { kubectl -n gitlab exec gitlab-garage-0 -- /garage "$@"; }
+until garage_cli status >/dev/null 2>&1; do sleep 3; done
+# Capture first: 'grep -q' exiting early would trip pipefail via SIGPIPE.
+if [[ "$(garage_cli status)" == *"NO ROLE ASSIGNED"* ]]; then
+  NODE_ID=$(garage_cli node id -q | cut -d@ -f1)
+  garage_cli layout assign -z dc1 -c 5G "${NODE_ID}"
+  garage_cli layout apply --version 1
+fi
+garage_cli key info gitlab >/dev/null 2>&1 || garage_cli key create gitlab >/dev/null
+KEY_INFO=$(garage_cli key info gitlab --show-secret)
+S3_KEY=$(awk '/Key ID/ {print $NF}' <<<"${KEY_INFO}")
+S3_SECRET=$(awk '/Secret key/ {print $NF}' <<<"${KEY_INFO}")
+for bucket in gitlab-artifacts git-lfs gitlab-uploads gitlab-packages gitlab-mr-diffs \
+              gitlab-terraform-state gitlab-ci-secure-files gitlab-dependency-proxy \
+              gitlab-pages gitlab-backups tmp gitlab-agent-plan-content gitlab-ci-catalog-bundles; do
+  garage_cli bucket create "${bucket}" >/dev/null 2>&1 || true
+  garage_cli bucket allow --read --write --owner "${bucket}" --key gitlab >/dev/null
+done
+
+S3_HOST="gitlab-garage.gitlab.svc.cluster.local:3900"
+kubectl -n gitlab create secret generic gitlab-object-storage --from-literal=config="provider: AWS
+region: garage
+aws_access_key_id: ${S3_KEY}
+aws_secret_access_key: ${S3_SECRET}
+endpoint: \"http://${S3_HOST}\"
+path_style: true
+" --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n gitlab create secret generic gitlab-object-storage-s3cmd --from-literal=config="[default]
+access_key = ${S3_KEY}
+secret_key = ${S3_SECRET}
+bucket_location = garage
+host_base = ${S3_HOST}
+host_bucket = ${S3_HOST}
+use_https = False
+signature_v2 = False
+" --dry-run=client -o yaml | kubectl apply -f -
 
 echo ">>> Installing GitLab from the official Helm chart (10-20 minutes on first install)"
 helm repo add gitlab https://charts.gitlab.io/ --force-update

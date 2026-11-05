@@ -1,0 +1,177 @@
+# Backing services the GitLab Helm chart stopped bundling in v10.0 (GitLab 19):
+# PostgreSQL, Redis (Valkey) and S3 object storage (Garage). Single replicas
+# sized for a laptop lab. setup.sh creates the secrets they read.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitlab-postgres-init
+  namespace: gitlab
+data:
+  # Runs once, in gitlabhq_production, when the data directory is first created.
+  extensions.sql: |
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    CREATE EXTENSION IF NOT EXISTS btree_gist;
+    CREATE EXTENSION IF NOT EXISTS amcheck;
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab-postgres
+  namespace: gitlab
+spec:
+  selector:
+    app: gitlab-postgres
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gitlab-postgres
+  namespace: gitlab
+spec:
+  serviceName: gitlab-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitlab-postgres
+  template:
+    metadata:
+      labels:
+        app: gitlab-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          env:
+            - name: POSTGRES_USER
+              value: gitlab
+            - name: POSTGRES_DB
+              value: gitlabhq_production
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gitlab-postgres
+                  key: password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "gitlab", "-d", "gitlabhq_production"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init
+          configMap:
+            name: gitlab-postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab-valkey
+  namespace: gitlab
+spec:
+  selector:
+    app: gitlab-valkey
+  ports:
+    - port: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitlab-valkey
+  namespace: gitlab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitlab-valkey
+  template:
+    metadata:
+      labels:
+        app: gitlab-valkey
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:8
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab-garage
+  namespace: gitlab
+spec:
+  selector:
+    app: gitlab-garage
+  ports:
+    - name: s3
+      port: 3900
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gitlab-garage
+  namespace: gitlab
+spec:
+  serviceName: gitlab-garage
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitlab-garage
+  template:
+    metadata:
+      labels:
+        app: gitlab-garage
+    spec:
+      containers:
+        - name: garage
+          image: dxflrs/garage:v2.2.0
+          ports:
+            - containerPort: 3900
+          volumeMounts:
+            - name: config
+              mountPath: /etc/garage.toml
+              subPath: garage.toml
+            - name: meta
+              mountPath: /var/lib/garage/meta
+            - name: data
+              mountPath: /var/lib/garage/data
+      volumes:
+        - name: config
+          secret:
+            secretName: gitlab-garage-config
+  volumeClaimTemplates:
+    - metadata:
+        name: meta
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 256Mi
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
