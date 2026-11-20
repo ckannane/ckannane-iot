@@ -5,7 +5,7 @@
 # HashiCorp registry). "latest" always points to the newest point release.
 BOX     = "rockylinux-10"
 BOX_URL = "https://dl.rockylinux.org/pub/rocky/10/images/x86_64/Rocky-10-Vagrant-Vbox.latest.x86_64.vagrant.virtualbox.box"
-LOGIN   = "ckannane"
+LOGIN   = "agimi"
 NAME    = "#{LOGIN}S"
 IP      = "192.168.56.110"
 
